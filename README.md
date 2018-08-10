@@ -9,4 +9,4 @@ https://www.sice.indiana.edu/graduate/courses/index.html?number=a521&department=
 https://www.informatics.indiana.edu/graduate/courses-by-semester.html?sem_id=4178
 
 /events
-Sometimes we need technnical solutions to political differences
+Remove events via DomDocument from a feed I didn;t control
