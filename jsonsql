@@ -1,0 +1,63 @@
+public function vsa_av_stats_webroot($oid = null)
+    {
+        $bigQuery = "CREATE TEMPORARY TABLE kaseya_webroot AS
+            (SELECT ap_endpoints.RMMAgentGUID, AVEnabled, AVVersion, Infected, LastSeen, LastScan, AttentionRequired
+                FROM ap_webroot_endpoints 
+                INNER JOIN ap_endpoints 
+				    ON ap_webroot_endpoints.oid = ap_endpoints.oid
+                    AND ap_webroot_endpoints.RMMEndClientID = ap_endpoints.RMMEndClientID
+                    AND ap_webroot_endpoints.RMMLocationID = ap_endpoints.RMMLocationID
+                    AND ap_webroot_endpoints.RMMAgentGUID = ap_endpoints.RMMAgentGUID ";
+        if(!is_null($oid)) {
+            $bigQuery .= "AND ap_endpoints.oid = $oid";
+        }
+        $bigQuery .= ")";
+
+        $this->db->trans_start();
+        $query = $this->db->query("DROP TEMPORARY TABLE IF EXISTS kaseya_webroot");
+        $query = $this->db->query($bigQuery);            
+        //MySQL Temp tables are restricive "You cannot refer to a TEMPORARY table more than once in the same query"                   
+        $query = $this->db->query("SET @AgentTotal = (SELECT COUNT(DISTINCT ap_rmm.ap_endpoints.RMMAgentGUID) FROM ap_rmm.ap_endpoints WHERE oid = $oid)");
+        $query = $this->db->query("SET @AVInstalled = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot)");
+        $query = $this->db->query("SET @MaxVer = (SELECT MAX(AVVersion) FROM kaseya_webroot)");
+        $query = $this->db->query("SET @NotMissing = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot)");
+        $query = $this->db->query("SET @Version = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot WHERE AVVersion != @MaxVer)");
+        $query = $this->db->query("SET @Disabled = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot WHERE AVEnabled = 0)");
+        $query = $this->db->query("SET @Infected = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot WHERE Infected = 1)");
+        $query = $this->db->query("SET @Attn = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot WHERE AttentionRequired = 1)");
+        $query = $this->db->query("SET @Day30 = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot WHERE LastSeen <= NOW() - INTERVAL 30 DAY)");
+        $query = $this->db->query("SET @Day14 = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM kaseya_webroot WHERE LastScan <= NOW() - INTERVAL 14 DAY)");
+        $query = $this->db->query("SET @NonManaged = (SELECT COUNT(DISTINCT RMMAgentGUID) FROM ap_av_unmanaged WHERE
+			((ap_av_unmanaged.Avast = 1 ) OR (ap_av_unmanaged.AVG = 1 )
+			OR (ap_av_unmanaged.BitDefender = 1 ) OR (ap_av_unmanaged.Comodo = 1 )
+			OR (ap_av_unmanaged.ESET = 1 ) OR (ap_av_unmanaged.Kaspersky = 1 )
+			OR (ap_av_unmanaged.MBAM = 1 ) OR (ap_av_unmanaged.McAfee = 1 )
+			OR (ap_av_unmanaged.Panda = 1 ) OR (ap_av_unmanaged.Sophos = 1 )
+			OR (ap_av_unmanaged.Symantec = 1 ) OR (ap_av_unmanaged.TrendMicro = 1 )
+            OR (ap_av_unmanaged.Webroot = 1 ) OR (ap_av_unmanaged.WinDefender = 1 ))
+            AND oid = $oid)");
+        $query = $this->db->query("UPDATE ap_rmm.ap_vsa_stats
+        SET av =
+            (SELECT DISTINCT JSON_OBJECT(
+            'ant_kaseya_agents', @AgentTotal, 
+            'ant_av_installed', @AVInstalled,
+            'ant_av_missing',  (@AgentTotal - @NotMissing),
+            'ant_out_version', @Version,
+            'ant_av_disabled', @Disabled,
+            'ant_infected', @Infected,
+            'ant_attention_req', @Attn,
+            'ant_agent_30days', @Day30,
+            'ant_full_scan_14days', @Day14,
+            'ant_webroot_not_in_kaseya', ( @NonManaged - (SELECT COUNT(DISTINCT ap_webroot_endpoints.RMMAgentGUID) FROM ap_webroot_endpoints)),
+            'ant_non_managed_av', @NonManaged - @AVInstalled,
+            'ant_no_av', @AgentTotal - @NoNManaged,
+            'ant_managed_av_sol', (SELECT MSP FROM ap_antivirus WHERE oid = $oid)
+            )
+	    FROM ap_webroot_endpoints
+        WHERE oid = $oid)
+        WHERE oid = $oid");
+
+
+
+        $this->db->trans_complete();
+    }
