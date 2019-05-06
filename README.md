@@ -9,7 +9,10 @@ https://www.sice.indiana.edu/graduate/courses/index.html?number=a521&department=
 https://www.informatics.indiana.edu/graduate/courses-by-semester.html?sem_id=4178
 
 /events
-Remove events via DomDocument from a feed I didn;t control
+Remove events via DomDocument from third party feeds
 
 nodejs-api
 Code running on AWS Lambda to retrieve API data, saves to S3, uploads to Redshift
+
+
+/jsonql seralize data for front end consumption  
